@@ -1,0 +1,618 @@
+Sürdürlebilir kod yazma problemi
+----------
+SOLID = OOP nin temel conseptleri olan Abstraction, Encapsulation,Inheritance ve Polymorphism'in geniþletilmesi temsil etmektedir. (Robert C.Martin)
+----
+Single Responsibility Principle (Tek Sorumluluk Prensibi)
+-Bir class deðiþtirilmesi için bir sebepten daha fazlasýna sahip olmamalýdýr.(Robert C.Martin)
+-Örneðin bir class SMS gönderiyorsa içerisinde sadece SMS context ile ilgili kodlar olmalý.
+-Ýsimlendirme sýrasýnda dar bir baðlamý içerecek isimler vermek önemli.
+-Helper yapýlarýndan kaçýnmak gerekli çünkü bu yapýlar Single Responsibility Principle ihmal eden en büyük yapýlardan biridir.
+-----
+.NET7 nasýl yüklenir?
+Continue without coding diyoruz. Microsoft web sitesinden önce Visual Studio sürümünü kontrol etmemiz gerekiyor.Visual Studio Installer içerisinden independent components içerisinden yükleyebiliriz. 
+---------------------------------------
+ÝlkHatalýDurumKodlar
+-----
+namespace SingleResponsibility.SRP.Bad
+{
+    public class Product
+    {
+        public int ProductID { get; set; }
+        public string ProductName { get; set; }
+        /*Yukarýdaki property bileþenlerini de kendi içerisinde tutuyor ve bunlarda bir  sorumluluk belirtiyor - 3.Sorumluluk*/
+        private static List<Product> ProductList = new List<Product>();/*static yaparak class instance üzerinden eriþilmez ve uygulama ayaða kalktýðý an List memory'ye yüklenir. */ //List tutulduðu için burada bir Repo sorumluluðu var.
+        public List<Product> GetProducts => ProductList;//Buradaki lambda gizli bir get isteðini temsil eder.
+        /*
+         public List<Product> GetProducts{ get {return ProductList;} }
+         */
+        public Product()
+        {
+            ProductList = new()
+            {
+                new(){ProductID=1,ProductName="Kalem 1"},
+                new(){ProductID=2,ProductName="Kalem 2"},
+                new(){ProductID=3,ProductName="Kalem 3"},
+                new(){ProductID=4,ProductName="Kalem 4"},
+                new(){ProductID=5,ProductName="Kalem 5"}
+            };
+        }
+        public void SaveOrUpdate(Product product)//2.Sorumluluk - List üzerinde CRUD iþlemleri yapýlýyor
+        {
+            var hasProduct=ProductList.Any(p=>p.ProductID==product.ProductID);//Any metodu ile products List içerisinde olup olmadýðý kontrol ediliyor.
+            if(!hasProduct)
+            {
+                ProductList.Add(product);
+            }
+            else
+            {
+                var index=ProductList.FindIndex(x=>x.ProductID==product.ProductID);//FindIndex ile index'ini buluyoruz.
+                ProductList[index] = product;
+            }
+        }
+        public void Delete(int id)//2.Sorumluluk
+        {
+            var hasProduct=ProductList.Find(x=>x.ProductID==id);
+            if (hasProduct == null)
+            {
+                throw new Exception("Ürün bulunamadý");
+            }
+            ProductList.Remove(hasProduct);
+        }
+        public void WriteToConsole()//1.Sorumluluk
+        {
+            ProductList.ForEach(x =>
+            {
+                Console.WriteLine($"{x.ProductID} - {x.ProductName}");
+            });//ProductList.ForEach List içerisini dolaþ anlamýndadýr.
+        }
+    }
+}
+-------------------------------------------------------------
+Ýkinci Durum - Doðru ve Düzeltilen Çalýþma Kodlarý
+-------
+namespace SingleResponsibility.SRP.Good
+{
+    public class Product //Sadece propertyleri tutan bir class
+    {
+        public int ProductID { get; set; }
+        public string ProductName { get; set; }
+    }
+    public class ProductRepository //ProductList tutan bir data
+    {
+        public ProductRepository()
+        {
+            ProductList = new()
+            {
+                new(){ProductID=1,ProductName="Kalem 1"},
+                new(){ProductID=2,ProductName="Kalem 2"},
+                new(){ProductID=3,ProductName="Kalem 3"},
+                new(){ProductID=4,ProductName="Kalem 4"},
+                new(){ProductID=5,ProductName="Kalem 5"}
+            };
+        }
+        private static List<Product> ProductList = new List<Product>();/*static yaparak class instance üzerinden eriþilmez ve uygulama ayaða kalktýðý an List memory'ye yüklenir. */
+        public List<Product> GetProducts => ProductList;
+        public void SaveOrUpdate(Product product)
+        {
+            var hasProduct = ProductList.Any(p => p.ProductID == product.ProductID);//Any metodu ile products List içerisinde olup olmadýðý kontrol ediliyor.
+            if (!hasProduct)
+            {
+                ProductList.Add(product);
+            }
+            else
+            {
+                var index = ProductList.FindIndex(x => x.ProductID == product.ProductID);//FindIndex ile index'ini buluyoruz.
+                ProductList[index] = product;
+            }
+        }
+        public void Delete(int id)
+        {
+            var hasProduct = ProductList.Find(x => x.ProductID == id);
+            if (hasProduct == null)
+            {
+                throw new Exception("Ürün bulunamadý");
+            }
+            ProductList.Remove(hasProduct);
+        }
+    }
+    public class ProductPresenter // Product sunan bir class
+    {
+        public void WriteToConsole(List<Product> ProductList)
+        {
+            ProductList.ForEach(x =>
+            {
+                Console.WriteLine($"{x.ProductID} - {x.ProductName}");
+            });//ProductList.ForEach List içerisini dolaþ anlamýndadýr.
+        }
+    }
+}
+---------
+Open-Closed Principle
+*Bir uygulamanýn geliþime açýk ama deðiþime kapalý olmasýný ifade ediyor. (Bertrand Meyer)
+-Geliþime açýk olmasý ne ifade eder : 
+Diyelim ki bir uygulama geliþtirdik ve 6 ay sonra canlýya aldýk. Uygulama çalýþma baþladý bir sýkýntý yok. Daha sonra customer'lardan feedback'ler almaya baþladýk. Bundan sonra biz bitmiþ bir projeye yeni feature'lar eklediðimizde bu feature var olan projeyi bozuyorsa bu prensibe aykýrý bir çalýþma yapmýþ oluyoruz.
+---------------------------------------
+ÝlkHatalýDurumKodlar
+-----
+namespace SOLID.OCP.Bad
+{
+    public class SalaryCalculator
+    {
+        public decimal Calculate(decimal salary, SalaryType salaryType)
+        {
+            decimal newSalary = 0;
+            switch(salaryType)
+            {
+                case SalaryType.Low:
+                    newSalary = salary * 2;
+                    break;
+                case SalaryType.Middle:
+                    newSalary = salary * 4;
+                    break;
+                case SalaryType.High:
+                    newSalary = salary * 6;
+                    break;
+                default:
+                    break;
+            }
+            return newSalary;
+        }
+    }
+    public enum SalaryType
+    {
+        Low,
+        Middle,
+        High
+    }
+}
+/*Diyelim ki enum içerisine Low-Middle ve Middle-High adýnda iki taným daha yapýyoruz. Bu sefer SalaryCalculator class'ýndaki Calculator metodunun içindeki switch te deðiþiklik yapacaðýz (hesaplamalarda deðiþebilir) ve open-closed principle aykýrý davranýþ olacak çünkü var olan yapýyý deðiþtiremeyiz.Yeni deðiþiklikler dýþarýdan implement edilmeli veya implement ederken yeni classlar,metotlar oluþturabiliriz ama var olan yapýyý bozulmayacak.*/
+----
+Program.cs
+using SOLID.OCP.Bad;
+SalaryCalculator salaryCalculator = new SalaryCalculator();
+Console.WriteLine($"Low Salary : {salaryCalculator.Calculate(1000,SalaryType.Low)}");
+Console.WriteLine($"Middle Salary : {salaryCalculator.Calculate(1000,SalaryType.Middle)}");
+Console.WriteLine($"High Salary : {salaryCalculator.Calculate(1000,SalaryType.High)}");
+Console.ReadLine();
+-------------------------------------------------------------
+Ýkinci Durum - Doðru ve Düzeltilen Çalýþma Kodlarý
+-------
+namespace SOLID.OCP.Good
+{
+    public interface ISalaryCalculate
+    {
+        decimal Calculate(decimal salary);
+    }
+    public class LowSalaryCalculate : ISalaryCalculate
+    {
+        public decimal Calculate(decimal salary)
+        {
+            return salary * 2;
+        }
+    }
+    public class MiddleSalaryCalculate : ISalaryCalculate
+    {
+        public decimal Calculate(decimal salary)
+        {
+            return salary * 4;
+        }
+    }
+    public class HighSalaryCalculate : ISalaryCalculate
+    {
+        public decimal Calculate(decimal salary)
+        {
+            return salary * 6;
+        }
+    }
+    public class ManagerSalaryCalculate : ISalaryCalculate
+    {
+        public decimal Calculate(decimal salary)
+        {
+            return (salary * 7);
+        }
+    }
+
+    public class SalaryCalculator
+    {
+        public decimal Calculate(decimal salary, ISalaryCalculate salaryCalculate)
+        {
+         return salaryCalculate.Calculate(salary);
+        }
+    }
+}
+/*Switch-case yapýsý genellikle Open-Closed Principle aykýrýdýr. Yani þekilde büyük projelerde enum yerine interface kullanmak daha avantajlýdýr bu prensip için. */
+---
+Program.cs
+using SOLID.OCP.Good;
+SalaryCalculator salaryCalculator=new SalaryCalculator();
+Console.WriteLine($"Low Salary : {salaryCalculator.Calculate(1000,new LowSalaryCalculate())}");
+Console.WriteLine($"Middle Salary : {salaryCalculator.Calculate(1000,new MiddleSalaryCalculate())}");
+Console.WriteLine($"High Salary : {salaryCalculator.Calculate(1000,new HighSalaryCalculate())}");
+Console.WriteLine($"Manager Salary : {salaryCalculator.Calculate(1000,new ManagerSalaryCalculate())}");
+Console.ReadLine();
+-------------------------------------------------------------
+Üçüncü Çalýþma - Doðru ve Düzeltilen Çalýþma Kodlarý
+-------
+namespace SOLID.OCP.Good2
+{
+
+    public class LowSalaryCalculate
+    {
+        public decimal Calculate(decimal salary)
+        {
+            return salary * 2;
+        }
+    }
+    public class MiddleSalaryCalculate 
+    {
+        public decimal Calculate(decimal salary)
+        {
+            return salary * 4;
+        }
+    }
+    public class HighSalaryCalculate 
+    {
+        public decimal Calculate(decimal salary)
+        {
+            return salary * 6;
+        }
+    }
+    public class ManagerSalaryCalculate 
+    {
+        public decimal Calculate(decimal salary)
+        {
+            return (salary * 7);
+        }
+    }
+
+    public class SalaryCalculator
+    {
+        //Action parametre alabilen/almayan void metotlar
+        //Predicate parametre alan geriye boolean dönen
+        //Func delegate herhangi bir parametre alan geriye herhangi bir type dönen
+        public decimal Calculate(decimal salary, Func<decimal,decimal> calculateDelegate)
+        {
+         return calculateDelegate(salary);
+        }
+    }
+}
+/*Delegateler metotlarý iþaret eden yapýlardýr.*/
+-----
+Program.cs
+using SOLID.OCP.Good2;
+SalaryCalculator salaryCalculator=new SalaryCalculator();
+Console.WriteLine($"Low Salary : {salaryCalculator.Calculate(1000,new LowSalaryCalculate().Calculate)}");
+Console.WriteLine($"Middle Salary : {salaryCalculator.Calculate(1000,new MiddleSalaryCalculate().Calculate)}");
+Console.WriteLine($"High Salary : {salaryCalculator.Calculate(1000,new HighSalaryCalculate().Calculate)}");
+Console.WriteLine($"Manager Salary : {salaryCalculator.Calculate(1000,new ManagerSalaryCalculate().Calculate)}");
+Console.WriteLine($"Manager Salary : {salaryCalculator.Calculate(1000,new ManagerSalaryCalculate().Calculate)}");
+/*Delegate ile iþlem yapmanýn avantajý. x=> lambda ifadesi metot gövdesi geçiyoruz.*/
+Console.WriteLine($"Custom Salary : {salaryCalculator.Calculate(1000, x=>
+{ /*Bu scope isimsiz bir metot yapabiliyoruz.*/
+    return x * 10;
+    //x burada Func aldýðý parametreye karþýlýk geliyor-->decimal
+})}");
+Console.ReadLine();
+----------------------------
+Liskov Substitution Principle
+Elimizde bir tane obje var(örneðin class olabilir) ve bu class'ý inheritance(miras alan) eden bir sub-class var. Programatik olarak miras aldýklarýndan dolayý birbirleri arasýnda yer deðiþtirip kullanabiliriz. Ýþte böyle bir kullaným esnasýnda programýn kýrýlmamasý lazým.
+---------------------------------------
+ÝlkHatalýDurumKodlar
+-----
+namespace SOLID.LSPBad
+{
+   public abstract class BasePhone
+    {
+        public void Call()
+        {
+            Console.WriteLine("Arama yapýldý");
+        }
+        public abstract void TakePhoto();
+    }
+    public class IPhone : BasePhone
+    {
+        public override void TakePhoto()
+        {
+            Console.WriteLine("Fotograf çekildi");
+        }
+    }
+    public class Nokia3310 : BasePhone
+    {
+        public override void TakePhoto()
+        {
+            throw new NotImplementedException();
+        }
+    }
+}
+-----
+Program.cs
+using SOLID.LSPBad;
+BasePhone phone;
+var i = 0;
+if(i==1)
+{
+    phone=new IPhone();
+}
+else
+{
+    phone = new Nokia3310();
+}
+phone.Call();
+phone.TakePhoto();
+BasePhone phone2 = new IPhone();
+phone2.Call();
+phone2.TakePhoto();
+phone2=new Nokia3310();
+phone2.Call();
+phone2.TakePhoto();
+/*Uygulama hata verdi çünkü Nokia3310 TakePhoto metodu exception fýrlatýr.*/
+Console.ReadLine();
+-------------------------------------------------------------
+Ýkinci Durum - Doðru ve Düzeltilen Çalýþma Kodlarý
+-------
+namespace SOLID.LSPGood
+{
+    public interface ITakePhoto
+    {
+        void TakePhoto();
+    }
+   public abstract class BasePhone
+    {
+        public void Call()
+        {
+            Console.WriteLine("Arama yapýldý");
+        }
+    }
+    public class IPhone : BasePhone, ITakePhoto
+    {
+        public void TakePhoto()
+        {
+            Console.WriteLine("Fotograf çekildi!!");
+        }
+    }
+    public class Nokia3310 : BasePhone
+    {
+
+    }
+}
+----
+Program.cs
+using SOLID.LSPGood;
+BasePhone phone = new IPhone();
+phone.Call();
+((ITakePhoto)phone).TakePhoto(); //Bu þekilde kullanabiliriz.
+phone=new Nokia3310();
+phone.Call();
+Console.ReadLine();
+-----------
+Interface Segregation Principle
+*Interface'i kullanacak olan Client'lara özgü olsun (Robert C.Martin)
+-Farz edelim iki tane console uygulama client'ý var. Product üzerinde okuma yazma iþlemi yapýyorlar. Biri sadece okuma iþlemi yaparken diðeri yazma, güncelleme, silme implementleri edecek
+---------------------------------------
+ÝlkHatalýDurumKodlar
+-----
+namespace SOLID.ISPGoodAndBad
+{
+    //1.Class Library Read Imp
+    //Class Library Create/Update/Delete Imp
+    public class ReadProductRepository : IProductRepository
+    {
+        public Product Create(Product product)//Exception fýrlatýr.
+        {
+            throw new NotImplementedException();
+        }
+
+        public Product Delete(Product product)//Exception fýrlatýr
+        {
+            throw new NotImplementedException();
+        }
+
+        public Product GetByID(int ID)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<Product> GetList()
+        {
+            throw new NotImplementedException();
+        }
+
+        public Product Update(Product product) //Exception fýrlatýr
+        {
+            throw new NotImplementedException();
+        }
+    }
+    public class Product
+    {
+        public int ProductID { get; set; }
+        public string ProductName { get; set; }
+    }
+    public interface IProductRepository
+    {
+        List<Product> GetList();
+        Product GetByID(int ID);
+        Product Create (Product product);
+        Product Update (Product product);
+        Product Delete (Product product);
+    }
+}
+-------------------------------------------------------------
+Ýkinci Durum - Doðru ve Düzeltilen Çalýþma Kodlarý
+-------
+namespace SOLID.ISPGoodAndBad
+{
+    //1.Class Library Read Imp
+    //Class Library Create/Update/Delete Imp
+    public class ReadProductRepository : IReadRepository
+    {
+        public Product GetByID(int ID)
+        {
+            throw new NotImplementedException();
+        }
+        public List<Product> GetList()
+        {
+            throw new NotImplementedException();
+        }
+    }
+    public class WriteProductRepository : IWriteRepository
+    {
+        public Product Create(Product product)
+        {
+            throw new NotImplementedException();
+        }
+        public Product Delete(Product product)
+        {
+            throw new NotImplementedException();
+        }
+        public Product Update(Product product)
+        {
+            throw new NotImplementedException();
+        }
+    }
+    public class Product
+    {
+        public int ProductID { get; set; }
+        public string ProductName { get; set; }
+    }
+    public interface IReadRepository
+    {
+        List<Product> GetList();
+        Product GetByID(int ID);
+    }
+    public interface IWriteRepository
+    {
+        Product Create(Product product);
+        Product Update(Product product);
+        Product Delete(Product product);
+    }
+}
+-----------------
+Dependency Inversion Principle
+High level modüller(Controller) low level modülere(Controller içerisindeki servisler,repositoryler veya bir servis_class içerisinde repository kullanýyoruz;servis_class-->high level;repository-->low level )var baðlý olmayacak, her ikisi içinde birbirleri arasýnda abstractiona baðlý olmalýdýr
+---
+Direct Dependency
+A Class --> B  Class
+*A Class{Controller} görevine yerine getirebilmek için B class'ýna{servis} ihtiyaç duymaktadýr.
+A Class içerisindeki ActionMethodlar'ýn görevlerini yerine getirebilmesi için yani saðlýklý bir þekilde çalýþabilmesi için B class'ýnýn methodlarýna ihtiyaç duymaktadýr. A Class'ýn B class'ýna karþý bir baðýmlýlýðý var. Yani B Class olmadan A Class çalýþamaz. Böyle bir durumda A Class B Class'ýndan direk nesne örneði kullanmayacak. A Class içerisinde new B() ifadesini kullanmamalýyýz. Eðer B b=new B() ifadesini kullanýrsak A B Class'ýný bilecektir. Daha sonrasýnda B Class'taki deðiþikliklerden A Class etkilenecektir.
+-------
+Inverted Dependency
+A Class <-- Interface <-- B Class
+*Burada A Class sadece interface'i bilecektir.
+Örneðin A Class IProductRepository implement ediyor B Class'ýnda ProductRepository SQL'den geliyor olsun. B Class yerine farklý bir class yazýlýrsa ve veriler Oracle'dan geliyorsa C Class olsun; C Class'ý ilgili interface implement ederse A Class'ý herhangi bir deðiþiklikten etkilenmeyecektir.
+----------------
+Örnek : Ýhlal eden bir çalýþma= A high level modül B low level modüle direk baðlý çünkü metodunu çaðýrýyor.
+AController
+{
+B Service
+ctor
+{
+BService=new BService()
+}
+void Method1()
+{
+BService.Method()
+}
+}
+**Metodun davranýþý aþaðýdan yukarý doðru çünkü BService.Method() yapabilmesi için new B() daha önce kullanýldý.
+-----
+Örnek düzeltilmiþ hali:
+AController
+{
+IService _service;//Arada soyutlama
+}
+ctor(IService service)
+{
+_service=service;
+}
+void Method1()
+{
+_service.Method();
+}
+}
+ProductSqlRepository:IService
+***new AController(new SqlRepository());
+ProductOracleRepository:IService
+***new AController(new OracleRepository());
+Akýþ yukarýdan aþaðýya doðru oldu.
+----
+Eðer bir uygulamada Dependency Inversion Principle baþarýlý uygulanmýþ ise;
+*Sürdürülebilir kod olmuþtur
+*Unit Test'ler çok daha kolay yazýlýr çünkü yapýlar birbirini bilmiyor.
+---------------------------------------
+ÝlkHatalýDurumKodlar
+-----
+namespace SOLID.DIPGoodAndBad
+{
+public class ProductService
+    {
+        private readonly ProductRepositoryFromSqlServer _repository; //High level modül, low level modülü biliyor. Dependency Inversion Principle aykýrýdýr.
+        public ProductService(ProductRepositoryFromSqlServer repository)
+        {
+            _repository = repository;
+        }
+        public List<string> GetAll()
+        {
+            return _repository.GetAll();
+        }
+    }
+public class ProductRepositoryFromSqlServer
+    {
+        public List<string> GetAll()
+        {
+            return new List<string>() {"SqlServer Kalem 1", "SqlServer Kalem 2" };
+        }
+    }
+}
+----
+Program.cs
+using SOLID.DIPGoodAndBad;
+var ProductService=new ProductService(new ProductRepositoryFromSqlServer());
+ProductService.GetAll().ForEach(x => Console.WriteLine(x));
+Console.ReadLine();
+-------------------------------------------------------------
+Ýkinci Durum - Doðru ve Düzeltilen Çalýþma Kodlarý
+-------
+namespace SOLID.DIPGoodAndBad
+{
+public class ProductService
+    {
+        private readonly IRepository _repository;//Bu interface kimi implement ettiði bilmediði için Dependency Inversion Principle uyuyor. Low level modüllerde istenilen her deðiþiklik yapýlabilir. Interface implement eden herhangi bir class'ý verebiliriz.
+        public ProductService(IRepository repository)
+        {
+            _repository = repository;
+        }
+        public List<string> GetAll()
+        {
+            return _repository.GetAll();
+        }
+    }
+public class ProductRepositoryFromSqlServer : IRepository
+    {
+        public List<string> GetAll()
+        {
+            return new List<string>() {"SqlServer Kalem 1", "SqlServer Kalem 2" };
+        }
+    }
+    public class ProductRepositoryFromOracle : IRepository
+    {
+        public List<string> GetAll()
+        {
+            return new List<string>() { "Oracle Kalem 1", "Oracle Kalem 2" };
+        }
+    }
+    public interface IRepository
+    {
+        List<string> GetAll();
+    }
+}
+/*Sürdürülebilir kodlar olmasý için akýþ hep iki yönlü olmalýdýr. yukarýdan-aþaðýya(interface veya abstract class ile) + aþaðýdan yukarýya*/
+/*Abstraction--> new() iþlemi kullanýlamayan: interface ve abstract class new()'lenemez-daha çok interface*/
+/*Abstract class-->base class'larda ortak objeleri tanýmlama tarafýnda daha çok kullanýrýz.*/
+--------
+Program.cs
+using SOLID.DIPGoodAndBad;
+var ProductService=new ProductService(new ProductRepositoryFromSqlServer());
+ProductService.GetAll().ForEach(x => Console.WriteLine(x));
+var ProductService2 = new ProductService(new ProductRepositoryFromOracle());
+ProductService2.GetAll().ForEach(x => Console.WriteLine(x));
+Console.ReadLine();
